@@ -5,14 +5,16 @@ description: Fetch an arXiv robotics/ML paper, extract its figures as crisp PNG 
 
 # paper-review
 
-Layout (DOCS = `<repo>/docs`, a symlink to `~/Desktop/paper/docs`):
+Layout. Tools/skills live in the workspace (committed). `docs/` (a symlink to `~/Desktop/paper/docs`) holds **only results and reference PDFs**;
+intermediates go to `<repo>/.cache/` (git-ignored):
 
 ```
 docs/papers/<slug>.pdf            original PDF
 docs/<slug>/figures/fig_N.png     cropped figures + figures.json (page, bbox, caption)
-docs/<slug>/text/pNN.txt          column-ordered text per page, figure glyph noise removed
 docs/<slug>/<slug>_ko.md          the review note (figures embedded as relative paths)
 docs/<slug>/<slug>_ko.html        rendered (KaTeX, TOC sidebar); --embed makes a single shareable file
+
+.cache/<slug>/text/pNN.txt        (workspace, git-ignored) column-ordered text per page, figure glyph noise removed
 ```
 
 ## Workflow
@@ -24,7 +26,7 @@ docs/<slug>/<slug>_ko.html        rendered (KaTeX, TOC sidebar); --embed makes a
    `extract_figures.py ... --override '{"N":[x0,y0,x1,y1,page]}'` (PDF points, 1-indexed page). See `PAINPOINTS.md` #2.
 4. `scripts/paper.sh scaffold <slug>` — generates `<slug>_ko.md` (header, 0. 한 줄 요약, Abstract, one heading per paper section, figures placed under the section that first cites them, 읽기 체크리스트 from the appendix headings), all with `TODO` markers.
    Figures float, so **move any misplaced figure** by hand (e.g. a figure first cited in a passing remark, or never cited).
-5. Read `text/pNN.txt` for the body pages only (skip Appendix and References unless asked). When an equation matters, render that page region
+5. Read `.cache/<slug>/text/pNN.txt` for the body pages only (skip Appendix and References unless asked). When an equation matters, render that page region
    (`page.get_pixmap(dpi=170, clip=Rect(...))`) and read it — extracted math is shredded. Then fill in `<slug>_ko.md`:
    - Header: source, scope (what was excluded), and the convention that `> 리뷰어 메모` blocks are the reviewer's comments, not the paper's.
    - One `##` per paper section, same numbering as the paper, `![Fig. N](figures/fig_N.png)` + italic Korean caption where the figure is first discussed.
