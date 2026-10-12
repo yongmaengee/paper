@@ -19,12 +19,14 @@ docs/<slug>/<slug>_ko.html        rendered (KaTeX, TOC sidebar); --embed makes a
 
 ## Workflow
 
-1. `scripts/paper.sh fetch <arxiv_id> <slug>` — check the printed title/pages match the intended paper.
-2. `scripts/paper.sh prep <slug>` — prints the section map. Find the page where the Appendix starts; then
-   `scripts/paper.sh prep <slug> <last_body_page>` to extract figures and text.
+Run every command from the **repo root** (the directory that contains `docs` and `.claude`) using the full paths below. Do not `cd` into the skill folder and do not look for the skill under `~/.claude`.
+
+1. `.claude/skills/paper-review/scripts/paper.sh fetch <arxiv_id> <slug>` — check the printed title/pages match the intended paper.
+2. `.claude/skills/paper-review/scripts/paper.sh prep <slug>` — prints the section map. Find the page where the Appendix starts; then
+   `.claude/skills/paper-review/scripts/paper.sh prep <slug> <last_body_page>` to extract figures and text.
 3. **Look at every `figures/fig_N.png`** (Read tool). Fix bad crops with
    `extract_figures.py ... --override '{"N":[x0,y0,x1,y1,page]}'` (PDF points, 1-indexed page). See `PAINPOINTS.md` #2.
-4. `scripts/paper.sh scaffold <slug>` — generates `<slug>_ko.md` (header, 0. 한 줄 요약, Abstract, one heading per paper section, figures placed under the section that first cites them, 읽기 체크리스트 from the appendix headings), all with `TODO` markers.
+4. `.claude/skills/paper-review/scripts/paper.sh scaffold <slug>` — generates `<slug>_ko.md` (header, 0. 한 줄 요약, Abstract, one heading per paper section, figures placed under the section that first cites them, 읽기 체크리스트 from the appendix headings), all with `TODO` markers.
    Figures float, so **move any misplaced figure** by hand (e.g. a figure first cited in a passing remark, or never cited).
 5. Read `.cache/<slug>/text/pNN.txt` for the body pages only (skip Appendix and References unless asked). When an equation matters, render that page region
    (`page.get_pixmap(dpi=170, clip=Rect(...))`) and read it — extracted math is shredded. Then fill in `<slug>_ko.md`:
@@ -33,9 +35,9 @@ docs/<slug>/<slug>_ko.html        rendered (KaTeX, TOC sidebar); --embed makes a
    - Content is a Korean **restatement of the section in the writer's own words** (claims, numbers, equations, setups) — not a sentence-by-sentence reproduction. Keep numbers and equations faithful to the paper; point to `→ App. X` for appendix-only details.
    - All math in `$…$` / `$$…$$` — including sub/superscripts inside bullets and captions.
    - Add critical notes (confounders, missing error bars, baseline fairness) as `> 리뷰어 메모`, and flag any values read off a plot by eye as approximate.
-6. `scripts/paper.sh lint <slug>` until it prints `0 error(s)`. It rejects leftover TODO, extracted-but-unused/out-of-order/uncaptioned figures,
+6. `.claude/skills/paper-review/scripts/paper.sh lint <slug>` until it prints `0 error(s)`. It rejects leftover TODO, extracted-but-unused/out-of-order/uncaptioned figures,
    missing paper sections, plain-text math, and any 8+ word English run copied from the paper (headings and "quoted labels" are exempt).
-7. `scripts/paper.sh html <slug>` and look at the result (headless Chrome screenshot:
+7. `.claude/skills/paper-review/scripts/paper.sh html <slug>` and look at the result (headless Chrome screenshot:
    `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --virtual-time-budget=10000 --window-size=1300,16000 --screenshot=/tmp/x.png file://…/<slug>_ko.html`, then crop with PIL to inspect math/figures).
 8. Append new pain points to `PAINPOINTS.md`.
 

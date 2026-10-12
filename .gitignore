@@ -1,4 +1,21 @@
+# --- 올리는 것 (tracked) ---
+# CLAUDE.md, .gitignore
+# .claude/skills/paper-review/** (SKILL.md, PAINPOINTS.md, requirements.txt, scripts/*)
+
+# --- 올리지 않는 것 ---
+
+# 논문 PDF(제3자 저작물)와 리뷰 결과(md/html/figure 크롭). 실제 위치는 ~/Desktop/paper/docs 로의 심볼릭 링크
 /docs
+
+# 재생성 가능한 중간 산출물 / 환경
+/.cache
 /.venv
 __pycache__/
-/.cache
+*.pyc
+
+# 로컬 도구 상태 (octave)
+/.octave/local/
+
+# 백업/압축본, OS 잡파일
+*.zip
+.DS_Store

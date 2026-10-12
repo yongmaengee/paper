@@ -9,7 +9,29 @@ Also dumps column-ordered text per page (`--text DIR`) since pdftotext -layout i
 import argparse, os, re
 import pymupdf
 
-HEAD = re.compile(r"^(?:[IVX]+\.|[A-Z]\.|\d+(?:\.\d+)*\.?)\s+\S|^(?:references|appendix|acknowledg|contributions|abstract)", re.I)
+# numbered headings in roman / letter / decimal style, with or without trailing dot ("1 Introduction", "4.1 Title", "II. RELATED WORK", "A. Foo")
+HEAD = re.compile(r"^(?:[IVX]+\.|[A-Z]\.|\d+(?:\.\d+)*\.?)\s+[A-Z]|^(?:references|appendix|acknowledg|contributions|abstract)", re.I)
+
+
+def body_font_size(doc):
+    """Most common span size (by characters) = body text size."""
+    import collections
+    c = collections.Counter()
+    for p in doc:
+        for b in p.get_text("dict")["blocks"]:
+            for l in b.get("lines", []):
+                for s in l["spans"]:
+                    c[round(s["size"], 1)] += len(s["text"])
+    return c.most_common(1)[0][0] if c else 10.0
+
+
+def block_sizes(page):
+    """{(x0,y0) rounded: (max span size, #lines)} to look up a heading candidate's font size."""
+    out = {}
+    for b in page.get_text("dict")["blocks"]:
+        if b["type"] == 0 and b["lines"]:
+            out[(round(b["bbox"][0]), round(b["bbox"][1]))] = (max(s["size"] for l in b["lines"] for s in l["spans"]), len(b["lines"]))
+    return out
 
 
 def page_blocks(page):
@@ -57,15 +79,20 @@ def main():
     doc = pymupdf.open(a.pdf)
     if a.text: os.makedirs(a.text, exist_ok=True)
     heads = []
+    body_size = body_font_size(doc)
     for pno, page in enumerate(doc, 1):
         lines = []
+        sizes = block_sizes(page)
         for b in page_blocks(page):
             t = " ".join(b[4].split())
             r = pymupdf.Rect(b[:4])
             if any((r & f).get_area() > 0.5 * r.get_area() for f in fb.get(pno, [])) or garbage(t):
                 continue
             lines.append(t)
-            if len(t) < 90 and HEAD.match(t) and not t.startswith("Fig") and not garbage(t) and re.search(r"[A-Za-z]{4}", t):
+            sz, nl = sizes.get((round(b[0]), round(b[1])), (body_size, 1))
+            # headings are at least body-sized (figure labels/list items inside figures are smaller) and at most 2 lines
+            if len(t) < 90 and HEAD.match(t) and not t.startswith("Fig") and not garbage(t) and re.search(r"[A-Za-z]{4}", t) \
+                    and sz >= body_size * 0.95 and nl <= 2:
                 print(f"p{pno:>2}  {t}")
                 heads.append({"page": pno, "y": round(b[1], 1), "title": t})
         if a.text:

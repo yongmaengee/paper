@@ -3,18 +3,18 @@
 
   lint_review.py docs/<slug>/<slug>_ko.md        (expects docs/papers/<slug>.pdf + docs/<slug>/figures/figures.json)
 
-ERROR (exit 1): TODO left; figure missing/unused/out of order/uncaptioned; image file missing;
+ERROR (exit 1): TODO left; figure missing/unused/uncaptioned; image file missing;
                 body section from the PDF has no matching heading; plain-text math (sub/superscripts outside $..$);
                 8+ word English run copied from the paper (note must be in the writer's own words);
                 header lacks source/scope/convention.
-WARN:           no `> 리뷰어 메모`; figure values read by eye not flagged as approximate; table/section is very short.
+WARN:           figures not in numeric order; numbers absent from the paper; thin note / empty leaf sections; no `> 리뷰어 메모`; figure values read by eye not flagged as approximate; table/section is very short.
 """
 import json, os, re, subprocess, sys
 import pymupdf
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from scaffold import headings  # noqa: E402
+from scaffold import headings, all_headings as headings_all  # noqa: E402
 
 
 def strip_code_math(t):
@@ -58,18 +58,46 @@ def main():
         if int(n) not in seen: E(f"Fig. {n} extracted but not embedded")
     for n in set(seen):
         if str(n) not in figs: E(f"Fig. {n} embedded but not in figures.json")
-    if seen != sorted(seen): E(f"figures embedded out of order: {seen}")
+    if seen != sorted(seen): W(f"figures embedded out of numeric order {seen} (fine if the paper cites them in that order)")
     for n in seen:
         if not re.search(rf"!\[Fig\. {n}\]\(figures/fig_{n}\.png\)\n\*Fig\. {n}\.", src): E(f"Fig. {n}: missing italic caption line right below the image")
 
     # section coverage (same numbering/title as the paper)
     if os.path.exists(pdf):
         body, _ = headings(pdf)
+        if len(body) < 3: E(f"heading detection found only {len(body)} body section(s): outline is unreliable, check `outline.py` output by hand")
         mdheads = [re.sub(r"\s*<!--.*?-->", "", h).strip().lower() for h in re.findall(r"^#{2,3} (.+)$", src, flags=re.M)]
         norm = lambda s: re.sub(r"[^a-z0-9π가-힣 ]", "", s.lower()).strip()
         for h in body:
             t = norm(re.sub(r"^(?:[IVX]+\.|[A-Z]\.|\d+(?:\.\d+)*\.)\s+", "", h["title"]))
             if not any(t[:25] in norm(m) for m in mdheads): E(f"paper section missing from note: '{h['title']}' (p.{h['page']})")
+
+    # depth: a note far shorter than the paper body is a stub even if every heading exists
+    if os.path.exists(pdf) and body:
+        d = pymupdf.open(pdf)
+        end = min([h["page"] for h in headings_all(pdf) if re.match(r"(references|acknowledg|appendix)", h["title"], re.I)] or [len(d)])
+        body_chars = sum(len(d[i].get_text()) for i in range(end))
+        note_chars = len(re.sub(r"\s+", "", strip_code_math(src)))
+        if note_chars < 0.12 * body_chars: W(f"note looks thin: {note_chars} chars vs ~{body_chars} body chars of the paper ({100*note_chars//max(body_chars,1)}%; pi0/pi0.5 notes are ~25-40%)")
+        # leaf sections only: a parent heading that is directly followed by its sub-sections is fine
+        nh = [(len(m.group(1)), m.group(2), m.end()) for m in re.finditer(r"^(#{2,3}) (.+)$", src, flags=re.M)]
+        titles = {re.sub(r"\s*<!--.*?-->", "", h["title"]).strip() for h in body}
+        for i, (lvl, title, end_) in enumerate(nh):
+            title = re.sub(r"\s*<!--.*?-->", "", title).strip()
+            if title not in titles: continue
+            nxt_lvl, nxt_start = (nh[i + 1][0], nh[i + 1][2] - len(nh[i + 1][1]) - lvl - 1) if i + 1 < len(nh) else (0, len(src))
+            if nxt_lvl > lvl: continue
+            seg = src[end_:nxt_start]
+            if len(re.findall(r"^\s*(?:[-*]|\d+\.)\s", seg, flags=re.M)) + len(re.findall(r"\n\n", seg)) < 2:
+                W(f"section '{title}' has almost no content")
+
+    # numbers must exist in the paper (catches unit slips such as 3.3B -> 330억). Korean unit conversions need a manual look.
+    if os.path.exists(pdf):
+        src_nums = set(re.findall(r"\d+(?:\.\d+)?", " ".join(pg.get_text() for pg in pymupdf.open(pdf))))
+        prose2 = re.sub(r"^#{1,6} .*$", " ", strip_code_math(src), flags=re.M)
+        prose2 = re.sub(r"\bFig\.? ?\d+|Table \d+|App\. \w+|p\.\d+|v\d+", " ", prose2)
+        odd = sorted({n for n in re.findall(r"(?<![\w.])\d+(?:\.\d+)?", prose2) if n not in src_nums and (len(n) >= 3 or "." in n)})
+        if odd: W(f"numbers in the note that never appear in the paper (check units/typos): {', '.join(odd[:15])}")
 
     # plain-text math
     plain = strip_code_math(re.sub(r"^# .*$", " ", src, count=1, flags=re.M))  # H1 repeats the paper title

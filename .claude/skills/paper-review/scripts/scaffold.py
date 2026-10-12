@@ -13,15 +13,19 @@ import argparse, json, os, re, subprocess, sys, tempfile
 import pymupdf
 
 STOP = re.compile(r"^(appendix|references|acknowledg)", re.I)
-OK_HEAD = re.compile(r"^(?:[IVX]+\.|[A-Z]\.|\d+(?:\.\d+)*\.)\s+\S")  # drop code lines like "1 transforms = ["
+OK_HEAD = re.compile(r"^(?:[IVX]+\.|[A-Z]\.|\d+(?:\.\d+)*\.?)\s+[A-Z]")  # "1 Introduction", "4.1 Title", "II. TITLE"
 
 
-def headings(pdf):
+def all_headings(pdf):
     here = os.path.dirname(os.path.abspath(__file__))
     with tempfile.NamedTemporaryFile(suffix=".json") as f:
         subprocess.run([sys.executable, os.path.join(here, "outline.py"), pdf, "--json", f.name],
                        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        allh = json.load(open(f.name))
+        return json.load(open(f.name))
+
+
+def headings(pdf):
+    allh = all_headings(pdf)
     body, appendix, in_app = [], [], False
     for h in allh:
         if STOP.match(h["title"]):
@@ -73,7 +77,9 @@ def main():
     body, appendix = headings(pdf)
     last_body_page = max(m["page"] for m in figs.values())
 
-    def label_level(t):  # roman numeral -> ##, letter/number sub -> ###
+    def label_level(t):  # top level (roman "II." / "1 Title") -> ##; sub level ("A." / "2.1 Title") -> ###
+        m = re.match(r"^(\d+(?:\.\d+)*)\.?\s", t)
+        if m: return "##" if "." not in m.group(1) else "###"
         return "##" if re.match(r"^[IVX]+\.", t) else "###"
 
     placed = {n: False for n in figs}
